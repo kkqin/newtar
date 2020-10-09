@@ -44,7 +44,7 @@ enum HeadType {
 	LONGNAME_HEAD
 };
 
-unsigned int oct2uint(const char* src, int read_size) {
+static unsigned int oct2uint(const char* src, int read_size) {
         unsigned int result = 0;
         int i = 0;
         while(i < read_size) {
@@ -52,6 +52,34 @@ unsigned int oct2uint(const char* src, int read_size) {
                 result = (result << 3) | byte_num;
         }
         return result;
+}
+
+static int recusive_mkdir(const char* dirname) {
+        const size_t len = strlen(dirname);
+        if (!len)
+                return -1;
+
+        char* path = (char*)calloc(len + 1, sizeof(char));
+        strncpy(path, dirname, len);
+
+        if (path[len - 1] == '/')
+                path[len - 1] = 0;
+
+        for(char *p = path; *p; p++) {
+                if (*p == '/') {
+                        *p = '\0';
+
+#ifdef  __linux__
+                        std::filesystem::create_directory(path);
+#elif   WIN32
+                        create_directory(path);
+#endif
+                        *p = '/';
+                }
+        }
+
+	free(path);
+	return 0;
 }
 
 namespace mytar {
@@ -121,33 +149,6 @@ void WholeTar::show_all_file() {
 	}
 }
 
-int recusive_mkdir(const char* dirname) {
-        const size_t len = strlen(dirname);
-        if (!len)
-                return -1;
-
-        char* path = (char*)calloc(len + 1, sizeof(char));
-        strncpy(path, dirname, len);
-
-        if (path[len - 1] == '/')
-                path[len - 1] = 0;
-
-        for(char *p = path; *p; p++) {
-                if (*p == '/') {
-                        *p = '\0';
-
-#ifdef  __linux__
-                        std::filesystem::create_directory(path);
-#elif   WIN32
-                        create_directory(path);
-#endif
-                        *p = '/';
-                }
-        }
-
-	free(path);
-	return 0;
-}
 
 bool WholeTar::extract_file(const std::string name) {
 	auto block = Hub::instance()->get_block(name);
@@ -166,7 +167,7 @@ bool WholeTar::extract_file(const std::string name) {
 	start_pos += 512;
 	m_file.seekg(start_pos);
 	if(block->is_longname) {
-		auto tar = std::make_shared<TAR_HEAD>();
+		TAR_HEAD* tar = new TAR_HEAD;
 		m_file.read(tar->block, 512);
 		filesize = oct2uint(tar->size, 11);
 		start_pos += 512;
