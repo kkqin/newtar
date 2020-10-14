@@ -4,9 +4,14 @@
 #include <memory>
 #include <map>
 #include <queue>
+#include <functional>
+#include <any>
 
 struct _tar_head;
 using TAR_HEAD = struct _tar_head;
+
+using ifStreamPtr = std::shared_ptr<std::ifstream>;
+ifStreamPtr open_tar_file(const std::string& tarfile);
 
 namespace mytar {
 
@@ -17,32 +22,18 @@ struct spe_tar{
 	bool is_longname;
 	long long filesize;
 };
-
 using Block = struct spe_tar;
+using BlockPtr = std::shared_ptr<Block>;
 
-class Hub{	
-	static Hub* m_instance;
-public:
-	std::map<std::string, std::shared_ptr<Block>> m_result;
-	static Hub* instance() {
-		if(!m_instance) {
-			m_instance = new Hub;
-		}
-		return m_instance;
-	}
-
-	std::shared_ptr<Block> get_block(const std::string name);
-};
-
-class WholeTar {
-public:
+struct WholeTar {
 	WholeTar(const char* file);
 	~WholeTar();
-	void parsing();
+	void parsing(std::function<void(std::map<std::string, std::shared_ptr<Block>>)> func);
 	void show_all_file();
 	bool extract_file(const std::string name); 
-private:
-	std::ifstream m_file;
+	std::shared_ptr<Block> get_file_block(const std::string& name);
+
+	std::shared_ptr<std::ifstream> m_file;
 	std::string m_name;
 };
 

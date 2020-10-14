@@ -82,33 +82,74 @@ static int recusive_mkdir(const char* dirname) {
 	return 0;
 }
 
+ifStreamPtr open_tar_file(const std::string& tarfile) {
+	auto m = ifStreamPtr(new std::ifstream());
+	m->open(tarfile, std::ifstream::in | std::ifstream::binary);
+	return m;
+}
+
+static void arrange_block(const std::string& tarfile, mytar::BlockPtr bl) {
+	if(!bl->is_longname) {
+		bl->offsize += 512;
+	} else {
+		auto file = open_tar_file(tarfile);
+		bl->offsize += 512;
+		file->seekg(bl->offsize);
+		TAR_HEAD* tar = new TAR_HEAD;
+		file->read(tar->block, 512);
+		bl->filesize = oct2uint(tar->size, 11);
+		bl->offsize += 512; // point to start
+		file->close();
+	}
+}
+
 namespace mytar {
+class Hub{	
+	static Hub* m_instance;
+public:
+	std::map<std::string, std::map<std::string, BlockPtr>> m_result;
+	static Hub* instance() {
+		if(!m_instance) {
+			m_instance = new Hub;
+		}
+		return m_instance;
+	}
+
+	BlockPtr get_block(const std::string tarfile, const std::string name);
+};
 
 Hub* Hub::m_instance = NULL;
 
-std::shared_ptr<Block> Hub::get_block(const std::string name) {
-	auto it = m_result.find(name);
-	if(it != m_result.end())
-		return it->second;
+BlockPtr Hub::get_block(const std::string tarfile, const std::string name) {
+	auto it = m_result.find(tarfile);
+	if(it != m_result.end()) {
+		auto files = it->second;
+		auto it2 = files.find(name);
+		if(it2 != files.end()) {
+			return it2->second;
+		}
+		else
+			return nullptr;
+	}
 	return nullptr;
 }
 
 WholeTar::WholeTar(const char* file) : m_name(file) {
-	m_file.open(m_name, std::ifstream::in | std::ifstream::binary);
+	m_file = open_tar_file(file);
 }
 
 WholeTar::~WholeTar() {
-	m_file.close();
+	m_file->close();
 }
 
-void WholeTar::parsing() {
+void WholeTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
 	std::queue<std::shared_ptr<TAR_HEAD>> judge_queue;
 	bool longname_ = false;
 	long long off_size_ = 0;
 	unsigned read_size_ = 512;
-	while(m_file) {
+	while(*m_file) {
 		std::shared_ptr<TAR_HEAD> tar = std::make_shared<TAR_HEAD>();
-		m_file.read(tar->block, read_size_);
+		m_file->read(tar->block, read_size_);
 
 		tar->id = off_size_;	
 		off_size_ += read_size_;
@@ -133,25 +174,31 @@ void WholeTar::parsing() {
 		}
 
 		if( longname_ && tar->itype == HeadType::LONGNAME_HEAD) {
-			Hub::instance()->m_result[tar->block] = std::make_shared<Block>(tar->id, true, file_size);
+			auto block = std::make_shared<Block>(tar->id, true, file_size);
+			arrange_block(m_name, block);
+			Hub::instance()->m_result[m_name].insert({tar->block, block});
 		}
 		else if(tar->itype == HeadType::HEAD && tar->type != lf_longname && prev->itype != HeadType::LONGNAME_HEAD) {
-			Hub::instance()->m_result[tar->name] = std::make_shared<Block>(tar->id, false, oct2uint(tar->size, 11));
+			auto block = std::make_shared<Block>(tar->id, true, file_size);
+			arrange_block(m_name, block);
+			Hub::instance()->m_result[m_name].insert({tar->name, block});
 		}
 	}
 
-	m_file.close();
+	func(Hub::instance()->m_result[m_name]);
+
+	m_file->close();
 }
 
 void WholeTar::show_all_file() {
-	for(auto it : Hub::instance()->m_result) {
+	for(auto it : Hub::instance()->m_result[m_name]) {
 		std::cout << "offsize:" << it.second->offsize << " " << it.first << std::endl;
 	}
 }
 
 
 bool WholeTar::extract_file(const std::string name) {
-	auto block = Hub::instance()->get_block(name);
+	auto block = Hub::instance()->get_block(m_name, name);
 
 	if(block == nullptr)
 		return false;
@@ -163,15 +210,8 @@ bool WholeTar::extract_file(const std::string name) {
 	recusive_mkdir(name.c_str());
 	std::ofstream o(name.c_str(), std::ofstream::binary);
 
-	m_file.open(m_name, std::ifstream::in | std::ifstream::binary);
-	start_pos += 512;
-	m_file.seekg(start_pos);
-	if(block->is_longname) {
-		TAR_HEAD* tar = new TAR_HEAD;
-		m_file.read(tar->block, 512);
-		filesize = oct2uint(tar->size, 11);
-		start_pos += 512;
-	}
+	m_file = open_tar_file(m_name);
+	m_file->seekg(start_pos);
 
 	if(!filesize)
 		return false;
@@ -181,15 +221,20 @@ bool WholeTar::extract_file(const std::string name) {
 			need_size = filesize; 
 			
 		char* buffer = new char[need_size];
-		m_file.read(buffer, need_size);
+		m_file->read(buffer, need_size);
 		o.write(buffer, need_size);
 		delete [] buffer;
 		filesize -= need_size;
 	}
 
 	o.close();
-	m_file.close();
+	m_file->close();
 	return true;
+}
+
+BlockPtr WholeTar::get_file_block(const std::string& name) {
+	auto block = Hub::instance()->get_block(m_name, name);
+	return block;
 }
 
 }
