@@ -16,22 +16,29 @@
 #pragma pack(1)
 typedef struct _tar_head {
         union {
-                struct {
-                        char name[100];
-                        char mode[8];
-                        char uid[8];
-                        char gid[8];
-                        char size[12];
-                        char mtime[12];
-                        char chksum[8];
-                        char type;
-                        char link_name[100];
-                        char ustar[8];
-                        char owner[32];
-                        char group[32];
-                        char major[32];
-                        char minor[32];
-                };
+		union {
+			struct {
+				char name[100];
+				char mode[8];
+				char uid[8];
+				char gid[8];
+				char size[12];
+				char mtime[12];
+				char chksum[8];
+				char type;
+				char link_name[100];
+				char ustar[8];
+				char owner[32];
+				char group[32];
+				char major[32];
+				char minor[32];
+			};
+
+			struct {
+				char blame[100];
+				char detect_flag[24];
+			};
+		};
                 char block[512];
         };
 	int itype;
@@ -268,24 +275,30 @@ void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
 	Parsing core_parse;
 	core_parse.do_parsing(true, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) { 
 		auto tar = judge_queue.back();
-		auto block_size = strlen(tar->block) + 1;
+		auto file_size = oct2uint(tar->size, 11);
 
-		if( tar->name[100 - 1] == 0x00 &&
-			tar->mode[8 - 1] == 0x00 &&
-			tar->uid[8 - 1] == 0x00 &&
-			tar->gid[8 - 1] == 0x00 &&
-			tar->size[12 - 1] == 0x00 &&
-			tar->mtime[12 - 1] == 0x00 &&
-			tar->chksum[8 - 1] == 0x00 && 
-			oct2uint(tar->size, 11)) {
+		auto flag = "0000000.0000000.0000000";
+		auto detect = true;
+		for(auto i = 0; i < sizeof(tar->detect_flag); i++) {
+			if(tar->detect_flag[i] != flag[i])
+				detect = false;
+		}
+
+		if( detect ) {
 			
 			tar->itype = HeadType::HEAD;
+
+			auto block = std::make_shared<Block>(tar->id, false, file_size);
+			arrange_block(m_name, block);
+			Hub::instance()->m_result[m_name].insert({tar->name, block});
 
 		}
 		else {
 			tar->itype = HeadType::BODY;
 		}
 	});
+
+	func(Hub::instance()->m_result[m_name]);
 }
 
 } // namspace 
