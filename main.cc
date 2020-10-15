@@ -1,7 +1,7 @@
 #include "mytar.h"
 
 int main() {
-	mytar::WholeTar tar{"new.tar"};
+	mytar::NTar tar{"new.tar"};
 	tar.parsing([](std::map<std::string, std::shared_ptr<mytar::Block>> m){
 		for(auto it : m) {
 			std::cout << it.first << " " << it.second->offsize << std::endl;

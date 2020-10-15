@@ -104,6 +104,45 @@ static void arrange_block(const std::string& tarfile, mytar::BlockPtr bl) {
 }
 
 namespace mytar {
+
+class Parsing {
+private:
+	std::string snppiner = "|/-\\";
+
+	void do_draw(int process) {
+		std::cout << "\r";
+		std::cout << "Parsing... " <<  snppiner[process % 4] << std::flush; 
+	}
+public:
+	
+        void do_parsing(bool show, std::shared_ptr<std::ifstream> m_file, 
+			std::function<void(bool& longname_,std::queue<std::shared_ptr<TAR_HEAD>> judge_queue)> judge_func) {
+		std::queue<std::shared_ptr<TAR_HEAD>> judge_queue;
+		bool longname_ = false;
+		long long off_size_ = 0;
+		unsigned read_size_ = 512;
+		unsigned process = 0;
+		while(*m_file) {
+			std::shared_ptr<TAR_HEAD> tar = std::make_shared<TAR_HEAD>();
+			m_file->read(tar->block, read_size_);
+
+			tar->id = off_size_;	
+			off_size_ += read_size_;
+			if(judge_queue.size() >= 2)
+				judge_queue.pop();
+
+			judge_queue.push(tar);
+			judge_func(longname_, judge_queue);
+
+			if(show)
+				do_draw(process++);
+		}
+
+		std::cout << std::endl;
+		m_file->close();
+        }
+};
+
 class Hub{	
 	static Hub* m_instance;
 public:
@@ -134,31 +173,16 @@ BlockPtr Hub::get_block(const std::string tarfile, const std::string name) {
 	return nullptr;
 }
 
-WholeTar::WholeTar(const char* file) : m_name(file) {
+NTar::NTar(const char* file) : StandardTar(file) {
 	m_file = open_tar_file(file);
 }
 
-WholeTar::~WholeTar() {
-	m_file->close();
-}
-
-void WholeTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
-	std::queue<std::shared_ptr<TAR_HEAD>> judge_queue;
-	bool longname_ = false;
-	long long off_size_ = 0;
-	unsigned read_size_ = 512;
-	while(*m_file) {
-		std::shared_ptr<TAR_HEAD> tar = std::make_shared<TAR_HEAD>();
-		m_file->read(tar->block, read_size_);
-
-		tar->id = off_size_;	
-		off_size_ += read_size_;
-		if(judge_queue.size() >= 2)
-			judge_queue.pop();
-
-		judge_queue.push(tar);
+void NTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
+	Parsing core_parse;
+	core_parse.do_parsing(true, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) {
 		auto prev = judge_queue.front();
 		auto file_size = oct2uint(prev->size, 11);
+		auto tar = judge_queue.back();
 		auto block_size = strlen(tar->block) + 1;
 
 		if(prev->type == lf_longname
@@ -183,21 +207,23 @@ void WholeTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func
 			arrange_block(m_name, block);
 			Hub::instance()->m_result[m_name].insert({tar->name, block});
 		}
-	}
+	});
 
 	func(Hub::instance()->m_result[m_name]);
-
-	m_file->close();
 }
 
-void WholeTar::show_all_file() {
+BlockPtr NTar::get_file_block(const std::string& name) {
+	auto block = Hub::instance()->get_block(m_name, name);
+	return block;
+}
+
+void NTar::show_all_file() {
 	for(auto it : Hub::instance()->m_result[m_name]) {
 		std::cout << "offsize:" << it.second->offsize << " " << it.first << std::endl;
 	}
 }
 
-
-bool WholeTar::extract_file(const std::string name) {
+bool NTar::extract_file(const std::string name) {
 	auto block = Hub::instance()->get_block(m_name, name);
 
 	if(block == nullptr)
@@ -232,9 +258,26 @@ bool WholeTar::extract_file(const std::string name) {
 	return true;
 }
 
-BlockPtr WholeTar::get_file_block(const std::string& name) {
-	auto block = Hub::instance()->get_block(m_name, name);
-	return block;
+////////////////
+
+XTar::XTar(const char* file) : StandardTar(file) {
+	m_file = open_tar_file(file);
 }
 
+void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
+	Parsing core_parse;
+	core_parse.do_parsing(true, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) { 
+		auto tar = judge_queue.back();
+		auto block_size = strlen(tar->block) + 1;
+
+		tar->name[100];
+		tar->mode[8];
+		tar->uid[8];
+		tar->gid[8];
+		tar->size[12];
+		tar->mtime[12];
+                tar->chksum[8];
+	});
 }
+
+} // namspace 
