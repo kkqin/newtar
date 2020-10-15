@@ -270,13 +270,21 @@ void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
 		auto tar = judge_queue.back();
 		auto block_size = strlen(tar->block) + 1;
 
-		tar->name[100];
-		tar->mode[8];
-		tar->uid[8];
-		tar->gid[8];
-		tar->size[12];
-		tar->mtime[12];
-                tar->chksum[8];
+		if( tar->name[100 - 1] == 0x00 &&
+			tar->mode[8 - 1] == 0x00 &&
+			tar->uid[8 - 1] == 0x00 &&
+			tar->gid[8 - 1] == 0x00 &&
+			tar->size[12 - 1] == 0x00 &&
+			tar->mtime[12 - 1] == 0x00 &&
+			tar->chksum[8 - 1] == 0x00 && 
+			oct2uint(tar->size, 11)) {
+			
+			tar->itype = HeadType::HEAD;
+
+		}
+		else {
+			tar->itype = HeadType::BODY;
+		}
 	});
 }
 
