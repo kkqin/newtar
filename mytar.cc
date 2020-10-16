@@ -105,6 +105,27 @@ static void arrange_block(const std::string& tarfile, mytar::BlockPtr bl) {
 
 namespace mytar {
 
+static const char magic_word[24] = {
+         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00,
+         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00,
+         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00
+};
+
+bool is_tar_head(char* block) {
+	if(!strncmp(&block[257], "ustar", 5)) {
+		char* owner = &block[257 + 8];
+		char* group = owner + 32;
+		if(!strcmp(owner, group)) 
+			return true;
+	}
+
+	for(auto i = 0; i < sizeof(magic_word); i++) {
+		if(block[100 + i] != magic_word[i])
+			return false;
+	}
+	return true;
+}
+
 class Parsing {
 private:
 	std::string snppiner = "|/-\\";
@@ -182,20 +203,23 @@ NTar::NTar(const char* file) : StandardTar(file) {
 	m_file = open_tar_file(file);
 }
 
-void NTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
+void NTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bool verbose) {
 	Parsing core_parse;
-	core_parse.do_parsing(true, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) {
+	core_parse.do_parsing(verbose, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) {
 		auto prev = judge_queue.front();
 		auto file_size = oct2uint(prev->size, 11);
 		auto tar = judge_queue.back();
 		auto block_size = strlen(tar->block) + 1;
 
+		auto prev_dect = is_tar_head( prev->block );
+		auto now_dect = is_tar_head( tar->block );
+
 		if(prev->type == lf_longname
-				&& file_size == block_size && !strncmp(prev->ustar, "ustar", 5)) {
+				&& file_size == block_size && prev_dect) {
 			tar->itype = HeadType::LONGNAME_HEAD;
 			longname_ = true;
 		}
-		else if(!strncmp(tar->ustar, "ustar", 5)){
+		else if(now_dect){
 			tar->itype = HeadType::HEAD;
 		}
 		else {
@@ -268,24 +292,13 @@ XTar::XTar(const char* file) : StandardTar(file) {
 	m_file = open_tar_file(file);
 }
 
-static const char magic_word[24] = {
-         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00,
-         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00,
-         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00
-};
-
-void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
+void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bool verbose) {
 	Parsing core_parse;
-	core_parse.do_parsing(true, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) { 
+	core_parse.do_parsing(verbose, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) { 
 		auto tar = judge_queue.back();
 		auto file_size = oct2uint(tar->size, 11);
 
-		auto detect = true;
-		for(auto i = 0; i < sizeof(magic_word); i++) {
-			if(tar->mode[i] != magic_word[i])
-				detect = false;
-		}
-
+		auto detect = is_tar_head( tar->block );
 		if( detect ) {
 			
 			tar->itype = HeadType::HEAD;

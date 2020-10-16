@@ -22,6 +22,8 @@ enum class Mode {
 
 namespace mytar {
 
+bool is_tar_head(char* block); 
+
 struct spe_tar{
 	spe_tar(long long sz, bool ok, long long fs):
 		offset(sz), is_longname(ok), filesize(fs) {}
@@ -36,7 +38,7 @@ class StandardTar{
 public:
 	StandardTar(const char* name) : m_name(name) {}
 	virtual ~StandardTar() { m_file->close(); }
-	virtual void parsing(std::function<void(std::map<std::string, BlockPtr>)> func) = 0;
+	virtual void parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bool verbose) = 0;
 	virtual BlockPtr get_file_block(const std::string& name); 
 protected:
 	std::shared_ptr<std::ifstream> m_file;
@@ -47,7 +49,7 @@ protected:
 class NTar : public StandardTar {
 public:
 	NTar(const char* file);
-	virtual void parsing(std::function<void(std::map<std::string, BlockPtr>)> func) override;
+	virtual void parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bool verbose=false) override;
 	void show_all_file();
 	bool extract_file(const std::string name); 
 	virtual BlockPtr get_file_block(const std::string& name);
@@ -56,7 +58,7 @@ public:
 class XTar : public StandardTar {
 public:
 	XTar(const char* file);
-	virtual void parsing(std::function<void(std::map<std::string, BlockPtr>)> func) override;
+	virtual void parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bool verbose=false) override;
 	virtual BlockPtr get_file_block(const std::string& name);
 };
 
