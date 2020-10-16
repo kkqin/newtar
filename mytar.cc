@@ -167,7 +167,8 @@ public:
 class Hub{	
 	static Hub* m_instance;
 public:
-	std::map<std::string, std::map<std::string, BlockPtr>> m_result;
+	std::map<std::string, std::map<long long, BlockPtr>> m_result; //offset, block
+
 	static Hub* instance() {
 		if(!m_instance) {
 			m_instance = new Hub;
@@ -175,16 +176,16 @@ public:
 		return m_instance;
 	}
 
-	BlockPtr get_block(const std::string tarfile, const std::string name);
+	BlockPtr get_block(const std::string tarfile, const long long offset);
 };
 
 Hub* Hub::m_instance = NULL;
 
-BlockPtr Hub::get_block(const std::string tarfile, const std::string name) {
+BlockPtr Hub::get_block(const std::string tarfile, const long long offset) {
 	auto it = m_result.find(tarfile);
 	if(it != m_result.end()) {
 		auto files = it->second;
-		auto it2 = files.find(name);
+		auto it2 = files.find(offset);
 		if(it2 != files.end()) {
 			return it2->second;
 		}
@@ -194,8 +195,8 @@ BlockPtr Hub::get_block(const std::string tarfile, const std::string name) {
 	return nullptr;
 }
 
-BlockPtr StandardTar::get_file_block(const std::string& name) {
-	auto block = Hub::instance()->get_block(m_name, name);
+BlockPtr StandardTar::get_file_block(const long long offset) {
+	auto block = Hub::instance()->get_block(m_name, offset);
 	return block;
 }
 
@@ -203,7 +204,7 @@ NTar::NTar(const char* file) : StandardTar(file) {
 	m_file = open_tar_file(file);
 }
 
-void NTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bool verbose) {
+void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose) {
 	Parsing core_parse;
 	core_parse.do_parsing(verbose, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) {
 		auto prev = judge_queue.front();
@@ -227,21 +228,21 @@ void NTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bo
 		}
 
 		if( longname_ && tar->itype == HeadType::LONGNAME_HEAD) {
-			auto block = std::make_shared<Block>(tar->id, true, file_size);
+			auto block = std::make_shared<Block>(tar->id, true, file_size, tar->block);
 			arrange_block(m_name, block);
-			Hub::instance()->m_result[m_name].insert({tar->block, block});
+			Hub::instance()->m_result[m_name].insert({tar->id, block});
 		}
 		else if(tar->itype == HeadType::HEAD && tar->type != lf_longname && prev->itype != HeadType::LONGNAME_HEAD) {
-			auto block = std::make_shared<Block>(tar->id, true, file_size);
+			auto block = std::make_shared<Block>(tar->id, false, file_size, tar->name);
 			arrange_block(m_name, block);
-			Hub::instance()->m_result[m_name].insert({tar->name, block});
+			Hub::instance()->m_result[m_name].insert({tar->id, block});
 		}
 	});
 
 	func(Hub::instance()->m_result[m_name]);
 }
 
-BlockPtr NTar::get_file_block(const std::string& name) {
+BlockPtr NTar::get_file_block(const long long name) {
 	return StandardTar::get_file_block(name);
 }
 
@@ -251,7 +252,7 @@ void NTar::show_all_file() {
 	}
 }
 
-bool NTar::extract_file(const std::string name) {
+/*bool NTar::extract_file(const std::string name) {
 	auto block = Hub::instance()->get_block(m_name, name);
 
 	if(block == nullptr)
@@ -284,7 +285,7 @@ bool NTar::extract_file(const std::string name) {
 	o.close();
 	m_file->close();
 	return true;
-}
+}*/
 
 ////////////////
 
@@ -292,7 +293,7 @@ XTar::XTar(const char* file) : StandardTar(file) {
 	m_file = open_tar_file(file);
 }
 
-void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bool verbose) {
+void XTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose) {
 	Parsing core_parse;
 	core_parse.do_parsing(verbose, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) { 
 		auto tar = judge_queue.back();
@@ -303,9 +304,9 @@ void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bo
 			
 			tar->itype = HeadType::HEAD;
 
-			auto block = std::make_shared<Block>(tar->id, false, file_size);
+			auto block = std::make_shared<Block>(tar->id, false, file_size, tar->name);
 			arrange_block(m_name, block);
-			Hub::instance()->m_result[m_name].insert({tar->name, block});
+			Hub::instance()->m_result[m_name].insert({tar->id, block});
 
 		}
 		else {
@@ -316,7 +317,12 @@ void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func, bo
 	func(Hub::instance()->m_result[m_name]);
 }
 
-BlockPtr XTar::get_file_block(const std::string& name) {
-	return StandardTar::get_file_block(name);
+BlockPtr XTar::get_file_block(const long long offset) {
+	return StandardTar::get_file_block(offset);
+}
+
+ifStreamPtr XTar::back_file() {
+	m_file->seekg(0);
+	return m_file;
 }
 } // namspace 

@@ -2,9 +2,9 @@
 
 int main(int argc, char* argv[]) {
 	mytar::NTar tar{argv[1]};
-	tar.parsing([](std::map<std::string, std::shared_ptr<mytar::Block>> m){
+	tar.parsing([](std::map<long long, std::shared_ptr<mytar::Block>> m){
 		for(auto it : m) {
-			std::cout << it.first << " " << it.second->offset << std::endl;
+			std::cout << it.first << " " << it.second->filename << std::endl;
 		}
 	});
 
