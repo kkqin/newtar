@@ -16,28 +16,21 @@
 #pragma pack(1)
 typedef struct _tar_head {
         union {
-		union {
-			struct {
-				char name[100];
-				char mode[8];
-				char uid[8];
-				char gid[8];
-				char size[12];
-				char mtime[12];
-				char chksum[8];
-				char type;
-				char link_name[100];
-				char ustar[8];
-				char owner[32];
-				char group[32];
-				char major[32];
-				char minor[32];
-			};
-
-			struct {
-				char blame[100];
-				char detect_flag[24];
-			};
+		struct {
+			char name[100];
+			char mode[8];
+			char uid[8];
+			char gid[8];
+			char size[12];
+			char mtime[12];
+			char chksum[8];
+			char type;
+			char link_name[100];
+			char ustar[8];
+			char owner[32];
+			char group[32];
+			char major[32];
+			char minor[32];
 		};
                 char block[512];
         };
@@ -97,15 +90,15 @@ ifStreamPtr open_tar_file(const std::string& tarfile) {
 
 static void arrange_block(const std::string& tarfile, mytar::BlockPtr bl) {
 	if(!bl->is_longname) {
-		bl->offsize += 512;
+		bl->offset += 512;
 	} else {
 		auto file = open_tar_file(tarfile);
-		bl->offsize += 512;
-		file->seekg(bl->offsize);
+		bl->offset += 512;
+		file->seekg(bl->offset);
 		TAR_HEAD* tar = new TAR_HEAD;
 		file->read(tar->block, 512);
 		bl->filesize = oct2uint(tar->size, 11);
-		bl->offsize += 512; // point to start
+		bl->offset += 512; // point to start
 		file->close();
 	}
 }
@@ -180,6 +173,11 @@ BlockPtr Hub::get_block(const std::string tarfile, const std::string name) {
 	return nullptr;
 }
 
+BlockPtr StandardTar::get_file_block(const std::string& name) {
+	auto block = Hub::instance()->get_block(m_name, name);
+	return block;
+}
+
 NTar::NTar(const char* file) : StandardTar(file) {
 	m_file = open_tar_file(file);
 }
@@ -220,13 +218,12 @@ void NTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
 }
 
 BlockPtr NTar::get_file_block(const std::string& name) {
-	auto block = Hub::instance()->get_block(m_name, name);
-	return block;
+	return StandardTar::get_file_block(name);
 }
 
 void NTar::show_all_file() {
 	for(auto it : Hub::instance()->m_result[m_name]) {
-		std::cout << "offsize:" << it.second->offsize << " " << it.first << std::endl;
+		std::cout << "offset:" << it.second->offset << " " << it.first << std::endl;
 	}
 }
 
@@ -236,7 +233,7 @@ bool NTar::extract_file(const std::string name) {
 	if(block == nullptr)
 		return false;
 
-	auto start_pos = block->offsize;
+	auto start_pos = block->offset;
 	auto filesize = block->filesize;
 
 	/// create file directly
@@ -271,16 +268,21 @@ XTar::XTar(const char* file) : StandardTar(file) {
 	m_file = open_tar_file(file);
 }
 
+static const char magic_word[24] = {
+         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00,
+         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00,
+         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00
+};
+
 void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
 	Parsing core_parse;
 	core_parse.do_parsing(true, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) { 
 		auto tar = judge_queue.back();
 		auto file_size = oct2uint(tar->size, 11);
 
-		auto flag = "0000000.0000000.0000000";
 		auto detect = true;
-		for(auto i = 0; i < sizeof(tar->detect_flag); i++) {
-			if(tar->detect_flag[i] != flag[i])
+		for(auto i = 0; i < sizeof(magic_word); i++) {
+			if(tar->mode[i] != magic_word[i])
 				detect = false;
 		}
 
@@ -301,4 +303,7 @@ void XTar::parsing(std::function<void(std::map<std::string, BlockPtr>)> func) {
 	func(Hub::instance()->m_result[m_name]);
 }
 
+BlockPtr XTar::get_file_block(const std::string& name) {
+	return StandardTar::get_file_block(name);
+}
 } // namspace 

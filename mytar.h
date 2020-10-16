@@ -22,8 +22,8 @@ namespace mytar {
 
 struct spe_tar{
 	spe_tar(long long sz, bool ok, long long fs):
-		offsize(sz), is_longname(ok), filesize(fs) {}
-	long long offsize;
+		offset(sz), is_longname(ok), filesize(fs) {}
+	long long offset;
 	bool is_longname;
 	long long filesize;
 };
@@ -35,7 +35,7 @@ public:
 	StandardTar(const char* name) : m_name(name) {}
 	virtual ~StandardTar() { m_file->close(); }
 	virtual void parsing(std::function<void(std::map<std::string, BlockPtr>)> func) = 0;
-	virtual BlockPtr get_file_block(const std::string& name) {}; 
+	virtual BlockPtr get_file_block(const std::string& name); 
 protected:
 	std::shared_ptr<std::ifstream> m_file;
 	std::string m_name;
@@ -55,6 +55,7 @@ class XTar : public StandardTar {
 public:
 	XTar(const char* file);
 	virtual void parsing(std::function<void(std::map<std::string, BlockPtr>)> func) override;
+	virtual BlockPtr get_file_block(const std::string& name);
 };
 
 }
