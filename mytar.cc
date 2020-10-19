@@ -322,6 +322,7 @@ BlockPtr XTar::get_file_block(const long long offset) {
 }
 
 ifStreamPtr XTar::back_file() {
+	m_file = open_tar_file(m_name);
 	m_file->seekg(0);
 	return m_file;
 }
