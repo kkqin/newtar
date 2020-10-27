@@ -88,8 +88,8 @@ ifStreamPtr open_tar_file(const std::string& tarfile) {
 	return m;
 }
 
-static void arrange_block(const std::string& tarfile, mytar::BlockPtr bl) {
-	if(!bl->is_longname) {
+static void arrange_block(const std::string& tarfile, std::shared_ptr<TAR_HEAD> tar, mytar::BlockPtr bl) {
+	if(!bl->is_longname && tar->type == lf_normal) {
 		bl->offset += 512;
 	} else {
 		auto file = open_tar_file(tarfile);
@@ -100,6 +100,11 @@ static void arrange_block(const std::string& tarfile, mytar::BlockPtr bl) {
 		bl->filesize = oct2uint(tar->size, 11);
 		bl->offset += 512; // point to start
 		file->close();
+	}
+
+	if(tar->type == lf_link) {
+		bl->is_hard_link = true; 
+		bl->linkfilename = tar->link_name;
 	}
 }
 
@@ -227,14 +232,14 @@ void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool
 			tar->itype = HeadType::BODY;
 		}
 
-		if( longname_ && tar->itype == HeadType::LONGNAME_HEAD) {
+		if(longname_ && tar->itype == HeadType::LONGNAME_HEAD) {
 			auto block = std::make_shared<Block>(tar->id, true, file_size, tar->block);
-			arrange_block(m_name, block);
+			arrange_block(m_name, tar, block);
 			Hub::instance()->m_result[m_name].insert({tar->id, block});
 		}
 		else if(tar->itype == HeadType::HEAD && tar->type != lf_longname && prev->itype != HeadType::LONGNAME_HEAD) {
 			auto block = std::make_shared<Block>(tar->id, false, file_size, tar->name);
-			arrange_block(m_name, block);
+			arrange_block(m_name, tar, block);
 			Hub::instance()->m_result[m_name].insert({tar->id, block});
 		}
 	});
@@ -248,7 +253,7 @@ BlockPtr NTar::get_file_block(const long long name) {
 
 void NTar::show_all_file() {
 	for(auto it : Hub::instance()->m_result[m_name]) {
-		std::cout << "offset:" << it.second->offset << " " << it.first << std::endl;
+		std::cout << "offset:" << it.second->offset << "name: " << it.second->filename << std::endl;
 	}
 }
 
@@ -305,7 +310,7 @@ void XTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool
 			tar->itype = HeadType::HEAD;
 
 			auto block = std::make_shared<Block>(tar->id, false, file_size, tar->name);
-			arrange_block(m_name, block);
+			arrange_block(m_name, tar, block);
 			Hub::instance()->m_result[m_name].insert({tar->id, block});
 
 		}
