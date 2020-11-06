@@ -322,6 +322,37 @@ void XTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool
 	func(Hub::instance()->m_result[m_name]);
 }
 
+void fast_parsing() {
+	m_file->seekg(0, std::ios_base::end);
+	auto file_size = m_file->tellg();
+	m_file->seekg(0);
+
+	long long off_set_ = 0;
+	unsigned process = 0;
+
+	while(off_set_ < file_size) {
+		std::shared_ptr<TAR_HEAD> tar = std::make_shared<TAR_HEAD>();
+		
+		m_file->read(tar->block, 512);
+		tar->id = off_set_
+		off_set_ += 512;
+		auto detect = is_tar_head( tar->block );
+		if( detect ) {
+			auto  inside_file_size = oct2uint(tar->size, 11);
+			tar->itype = HeadType::TAR_HEAD;
+			auto block = std::make_shared<Block>(tar->id, false, inside_file_size, tar->name);
+			//arrange_block();
+			// insert 
+			off_set_ += inside_file_size;
+			auto res = inside_file_size % 512;
+			if(res)
+				off_set_ += (512 -res);
+		}
+		else
+			tar->itype = HeadType::BODY;
+	} 
+}
+
 BlockPtr XTar::get_file_block(const long long offset) {
 	return StandardTar::get_file_block(offset);
 }
