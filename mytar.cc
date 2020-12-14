@@ -90,10 +90,10 @@ ifStreamPtr open_tar_file(const std::string& tarfile) {
 
 static void arrange_block(const std::string& tarfile, std::shared_ptr<TAR_HEAD> tar, mytar::BlockPtr bl) {
 	if(!bl->is_longname && tar->type == lf_normal) {
-		//bl->offset += 512;
+		bl->offset += 512;
 	} else {
 		auto file = open_tar_file(tarfile);
-		bl->offset += 512;
+		//bl->offset += 512;
 		file->seekg(bl->offset);
 		TAR_HEAD* tar = new TAR_HEAD;
 		file->read(tar->block, 512);
@@ -221,7 +221,31 @@ NTar::NTar(const char* file) : StandardTar(file) {
 void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose) {
 	Parsing core_parse;
 	core_parse.do_parsing(verbose, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) {
+
+		auto tar = judge_queue.back();
 		auto prev = judge_queue.front();
+		auto bl = std::make_shared<Block>();
+		if(prev->type == lf_longname) {
+			m_file->seekg(prev->id);
+			auto sz = oct2uint(prev->size, 11);
+			char* filename = new char[sz];
+			m_file->read(filename, sz);
+			bl->offset = tar->id;
+			bl->is_longname = true;
+			bl->filename = filename;
+			delete [] filename;
+		}
+		else {
+			bl->offset = tar->id;
+			bl->is_longname = false;
+			bl->filename = tar->name;
+		}
+
+		bl->filesize = oct2uint(tar->size, 11);
+
+		if(prev != tar)
+			Hub::instance()->m_result[m_name].insert({tar->id, bl});
+		/*auto prev = judge_queue.front();
 		auto file_size = oct2uint(prev->size, 11);
 		auto tar = judge_queue.back();
 		auto block_size = strlen(tar->block) + 1;
@@ -250,7 +274,7 @@ void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool
 			auto block = std::make_shared<Block>(tar->id, false, file_size, tar->name);
 			arrange_block(m_name, tar, block);
 			Hub::instance()->m_result[m_name].insert({tar->id, block});
-		}
+		}*/
 	});
 
 	func(Hub::instance()->m_result[m_name]);

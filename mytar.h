@@ -25,6 +25,7 @@ namespace mytar {
 bool is_tar_head(char* block); 
 
 struct spe_tar{
+	spe_tar() {}
 	spe_tar(long long sz, bool ok, long long fs, std::string n):
 		offset(sz), 
 		is_longname(ok), 
