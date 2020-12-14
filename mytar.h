@@ -67,7 +67,6 @@ public:
 	XTar(const char* file);
 	virtual void parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose=false) override;
 	virtual BlockPtr get_file_block(const long long offset) override;
-	void fast_parsing();
 	ifStreamPtr back_file(); 
 };
 
