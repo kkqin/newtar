@@ -90,7 +90,7 @@ ifStreamPtr open_tar_file(const std::string& tarfile) {
 
 static void arrange_block(const std::string& tarfile, std::shared_ptr<TAR_HEAD> tar, mytar::BlockPtr bl) {
 	if(!bl->is_longname && tar->type == lf_normal) {
-		bl->offset += 512;
+		//bl->offset += 512;
 	} else {
 		auto file = open_tar_file(tarfile);
 		bl->offset += 512;
