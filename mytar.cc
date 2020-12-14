@@ -266,6 +266,12 @@ void NTar::show_all_file() {
 	}
 }
 
+ifStreamPtr NTar::back_file() {
+	m_file = open_tar_file(m_name);
+	m_file->seekg(0);
+	return m_file;
+}
+
 /*bool NTar::extract_file(const std::string name) {
 	auto block = Hub::instance()->get_block(m_name, name);
 
@@ -303,41 +309,4 @@ void NTar::show_all_file() {
 
 ////////////////
 
-XTar::XTar(const char* file) : StandardTar(file) {
-	m_file = open_tar_file(file);
-}
-
-void XTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose) {
-	Parsing core_parse;
-	core_parse.do_parsing(verbose, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) { 
-		auto tar = judge_queue.back();
-		auto file_size = oct2uint(tar->size, 11);
-
-		auto detect = is_tar_head( tar->block );
-		if( detect ) {
-			
-			tar->itype = HeadType::HEAD;
-
-			auto block = std::make_shared<Block>(tar->id, false, file_size, tar->name);
-			arrange_block(m_name, tar, block);
-			Hub::instance()->m_result[m_name].insert({tar->id, block});
-
-		}
-		else {
-			tar->itype = HeadType::BODY;
-		}
-	});
-
-	func(Hub::instance()->m_result[m_name]);
-}
-
-BlockPtr XTar::get_file_block(const long long offset) {
-	return StandardTar::get_file_block(offset);
-}
-
-ifStreamPtr XTar::back_file() {
-	m_file = open_tar_file(m_name);
-	m_file->seekg(0);
-	return m_file;
-}
 } // namspace 
