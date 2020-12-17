@@ -110,27 +110,6 @@ static void arrange_block(const std::string& tarfile, std::shared_ptr<TAR_HEAD> 
 
 namespace mytar {
 
-static const char magic_word[24] = {
-         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00,
-         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00,
-         0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00
-};
-
-bool is_tar_head(char* block) {
-	if(!strncmp(&block[257], "ustar", 5)) {
-		char* owner = &block[257 + 8];
-		char* group = owner + 32;
-		if(!strcmp(owner, group)) 
-			return true;
-	}
-
-	for(auto i = 0; i < sizeof(magic_word); i++) {
-		if(block[100 + i] != magic_word[i])
-			return false;
-	}
-	return true;
-}
-
 class Parsing {
 private:
 	std::string snppiner = "|/-\\";
@@ -142,7 +121,7 @@ private:
 public:
 	
         void do_parsing(bool show, std::shared_ptr<std::ifstream> m_file, 
-			std::function<void(bool& longname_,std::queue<std::shared_ptr<TAR_HEAD>> judge_queue)> judge_func) {
+			std::function<void(bool& longname_,std::queue<std::shared_ptr<TAR_HEAD>>& judge_queue)> judge_func) {
 		std::queue<std::shared_ptr<TAR_HEAD>> judge_queue;
 		bool longname_ = false;
 		long long off_set_ = 0;
@@ -153,8 +132,10 @@ public:
 			std::shared_ptr<TAR_HEAD> tar = std::make_shared<TAR_HEAD>();
 			m_file->read(tar->block, read_size_);
 
-			off_set_ += 512;
-			tar->id = off_set_;	
+			tar->id = off_set_; // head start offset
+			off_set_ += 512; 
+			if(tar->size == 0x0)
+				continue;
 			auto inside_file_size = oct2uint(tar->size, 11);
 
 			off_set_ += inside_file_size;
@@ -163,9 +144,6 @@ public:
                                 off_set_ += (512 - res);
                         }
 
-			if(judge_queue.size() >= 2)
-				judge_queue.pop();
-
 			judge_queue.push(tar);
 			judge_func(longname_, judge_queue);
 
@@ -173,7 +151,6 @@ public:
 				do_draw(process++);
 		}
 
-		std::cout << std::endl;
 		m_file->close();
         }
 };
@@ -218,63 +195,48 @@ NTar::NTar(const char* file) : StandardTar(file) {
 	m_file = open_tar_file(file);
 }
 
+void clean_queue(std::queue<std::shared_ptr<TAR_HEAD>>& judge_queue) {
+	if(judge_queue.size() == 2)
+		while(!judge_queue.empty())
+			judge_queue.pop();
+}
+
 void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose) {
 	Parsing core_parse;
-	core_parse.do_parsing(verbose, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>> judge_queue) {
+	core_parse.do_parsing(verbose, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>>& judge_queue) {
 
 		auto tar = judge_queue.back();
-		auto prev = judge_queue.front();
+		auto prev_tar = judge_queue.front();
+
+		if(tar == prev_tar)
+			return;
+	
 		auto bl = std::make_shared<Block>();
-		if(prev->type == lf_longname) {
-			m_file->seekg(prev->id);
-			auto sz = oct2uint(prev->size, 11);
+		if(tar->type == lf_dir) {
+			clean_queue(judge_queue);			
+			return;
+		}
+
+		if(prev_tar->type == lf_longname && tar->type == lf_normal) {
+			m_file->seekg(prev_tar->id + 512);
+			auto sz = oct2uint(prev_tar->size, 11);
 			char* filename = new char[sz];
-			m_file->read(filename, sz);
-			bl->offset = tar->id;
+			m_file->read(filename, sz); // get long file name;
 			bl->is_longname = true;
 			bl->filename = filename;
+
 			delete [] filename;
 		}
 		else {
-			bl->offset = tar->id;
 			bl->is_longname = false;
 			bl->filename = tar->name;
 		}
 
+		bl->offset = tar->id + 512;
 		bl->filesize = oct2uint(tar->size, 11);
-
-		if(prev != tar)
-			Hub::instance()->m_result[m_name].insert({tar->id, bl});
-		/*auto prev = judge_queue.front();
-		auto file_size = oct2uint(prev->size, 11);
-		auto tar = judge_queue.back();
-		auto block_size = strlen(tar->block) + 1;
-
-		auto prev_dect = is_tar_head( prev->block );
-		auto now_dect = is_tar_head( tar->block );
-
-		if(prev->type == lf_longname
-				&& file_size == block_size && prev_dect) {
-			tar->itype = HeadType::LONGNAME_HEAD;
-			longname_ = true;
-		}
-		else if(now_dect){
-			tar->itype = HeadType::HEAD;
-		}
-		else {
-			tar->itype = HeadType::BODY;
-		}
-
-		if(longname_ && tar->itype == HeadType::LONGNAME_HEAD) {
-			auto block = std::make_shared<Block>(tar->id, true, file_size, tar->block);
-			arrange_block(m_name, tar, block);
-			Hub::instance()->m_result[m_name].insert({tar->id, block});
-		}
-		else if(tar->itype == HeadType::HEAD && tar->type != lf_longname && prev->itype != HeadType::LONGNAME_HEAD) {
-			auto block = std::make_shared<Block>(tar->id, false, file_size, tar->name);
-			arrange_block(m_name, tar, block);
-			Hub::instance()->m_result[m_name].insert({tar->id, block});
-		}*/
+		Hub::instance()->m_result[m_name].insert({bl->offset, bl});
+		
+		clean_queue(judge_queue);			
 	});
 
 	func(Hub::instance()->m_result[m_name]);
