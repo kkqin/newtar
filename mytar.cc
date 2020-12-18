@@ -208,7 +208,7 @@ void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool
 		auto tar = judge_queue.back();
 		auto prev_tar = judge_queue.front();
 
-		if(tar == prev_tar)
+		if(tar == prev_tar && prev_tar->type == lf_longname)
 			return;
 	
 		auto bl = std::make_shared<Block>();
