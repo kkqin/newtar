@@ -196,9 +196,8 @@ NTar::NTar(const char* file) : StandardTar(file) {
 }
 
 void clean_queue(std::queue<std::shared_ptr<TAR_HEAD>>& judge_queue) {
-	if(judge_queue.size() == 2)
-		while(!judge_queue.empty())
-			judge_queue.pop();
+	while(!judge_queue.empty())
+		judge_queue.pop();
 }
 
 void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose) {
@@ -212,8 +211,8 @@ void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool
 			return;
 	
 		auto bl = std::make_shared<Block>();
-		if(tar->type == lf_dir) {
-			clean_queue(judge_queue);			
+		if(tar->type == lf_dir || tar->type == lf_longname) {
+			clean_queue(judge_queue);
 			return;
 		}
 
