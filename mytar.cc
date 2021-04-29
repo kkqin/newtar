@@ -212,6 +212,14 @@ void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool
 	
 		auto bl = std::make_shared<Block>();
 		if(tar->type == lf_dir || tar->type == lf_longname) {
+			bl->offset = tar->id;
+			bl->filesize = oct2uint(tar->size, 11);
+			bl->filename = tar->name;
+			if (tar->type == lf_dir) 
+				bl->is_dir = true;
+			if (tar->type == lf_longname)
+				bl->is_longname = true;
+			Hub::instance()->m_result[m_name].insert({bl->offset, bl});
 			clean_queue(judge_queue);
 			return;
 		}
@@ -247,8 +255,10 @@ BlockPtr NTar::get_file_block(const long long name) {
 
 void NTar::show_all_file() {
 	for(auto it : Hub::instance()->m_result[m_name]) {
-		std::cout << "offset:" << it.second->offset << "name: " << it.second->filename << std::endl;
+		std::cout << "offset:" << it.second->offset << " name: " << it.second->filename << std::endl;
 	}
+
+	std::cout << "ALL file count: "<< Hub::instance()->m_result[m_name].size() << std::endl;
 }
 
 ifStreamPtr NTar::back_file() {

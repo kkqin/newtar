@@ -39,6 +39,7 @@ struct spe_tar{
 	std::string filename;
 	bool is_hard_link;
 	std::string linkfilename;
+	bool is_dir;
 };
 using Block = struct spe_tar;
 using BlockPtr = std::shared_ptr<Block>;
