@@ -155,7 +155,7 @@ public:
         }
 };
 
-class Hub{	
+class Hub {	
 	static Hub* m_instance;
 public:
 	std::map<std::string, std::map<long long, BlockPtr>> m_result; //offset, block
@@ -200,9 +200,9 @@ void clean_queue(std::queue<std::shared_ptr<TAR_HEAD>>& judge_queue) {
 		judge_queue.pop();
 }
 
-void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose) {
+void NTar::parsing(std::function<void(BlockPtr)> func, bool verbose) {
 	Parsing core_parse;
-	core_parse.do_parsing(verbose, m_file, [this](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>>& judge_queue) {
+	core_parse.do_parsing(verbose, m_file, [this, func](bool& longname_, std::queue<std::shared_ptr<TAR_HEAD>>& judge_queue) {
 
 		auto tar = judge_queue.back();
 		auto prev_tar = judge_queue.front();
@@ -215,10 +215,8 @@ void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool
 			bl->offset = tar->id;
 			bl->filesize = oct2uint(tar->size, 11);
 			bl->filename = tar->name;
-			if (tar->type == lf_dir) 
+			if (tar->type == lf_dir)
 				bl->is_dir = true;
-			if (tar->type == lf_longname)
-				bl->is_longname = true;
 			Hub::instance()->m_result[m_name].insert({bl->offset, bl});
 			clean_queue(judge_queue);
 			return;
@@ -242,11 +240,11 @@ void NTar::parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool
 		bl->offset = tar->id + 512;
 		bl->filesize = oct2uint(tar->size, 11);
 		Hub::instance()->m_result[m_name].insert({bl->offset, bl});
+
+		func(bl);
 		
 		clean_queue(judge_queue);			
 	});
-
-	func(Hub::instance()->m_result[m_name]);
 }
 
 BlockPtr NTar::get_file_block(const long long name) {
@@ -267,8 +265,10 @@ ifStreamPtr NTar::back_file() {
 	return m_file;
 }
 
-/*bool NTar::extract_file(const std::string name) {
-	auto block = Hub::instance()->get_block(m_name, name);
+bool NTar::extract_file(const long long offset) {
+	BlockPtr block = nullptr;
+	auto nmap = Hub::instance()->m_result[m_name];
+	block = nmap[offset];
 
 	if(block == nullptr)
 		return false;
@@ -277,8 +277,8 @@ ifStreamPtr NTar::back_file() {
 	auto filesize = block->filesize;
 
 	/// create file directly
-	recusive_mkdir(name.c_str());
-	std::ofstream o(name.c_str(), std::ofstream::binary);
+	recusive_mkdir(block->filename.c_str());
+	std::ofstream o(block->filename.c_str(), std::ofstream::binary);
 
 	m_file = open_tar_file(m_name);
 	m_file->seekg(start_pos);
@@ -300,8 +300,6 @@ ifStreamPtr NTar::back_file() {
 	o.close();
 	m_file->close();
 	return true;
-}*/
-
-////////////////
+}
 
 } // namspace 

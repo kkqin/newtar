@@ -48,7 +48,7 @@ class StandardTar{
 public:
 	StandardTar(const char* name) : m_name(name) {}
 	virtual ~StandardTar() { m_file->close(); }
-	virtual void parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose) = 0;
+	virtual void parsing(std::function<void(BlockPtr)> func, bool verbose) = 0;
 	virtual BlockPtr get_file_block(const long long offset); 
 protected:
 	ifStreamPtr m_file;
@@ -58,9 +58,9 @@ protected:
 class NTar : public StandardTar {
 public:
 	NTar(const char* file);
-	virtual void parsing(std::function<void(std::map<long long, BlockPtr>)> func, bool verbose=false) override;
+	virtual void parsing(std::function<void(BlockPtr)> func, bool verbose=false) override;
 	void show_all_file();
-	//bool extract_file(const std::string name); 
+	bool extract_file(const long long offset); 
 	virtual BlockPtr get_file_block(const long long offset) override;
 	ifStreamPtr back_file(); 
 };

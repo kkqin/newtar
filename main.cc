@@ -6,21 +6,19 @@ int main(int argc, char* argv[]) {
 	if (argv[2] != NULL) {
 		show = true;
 	}
-	tar.parsing([](std::map<long long, std::shared_ptr<mytar::Block>> m){
-		for(auto it : m) {
-			std::cout << it.first << " " << it.second->filename; 
+	tar.parsing([](std::shared_ptr<mytar::Block> bl){
+			std::cout << bl->offset << " " << bl->filename; 
 
-			if (it.second->is_dir)
+			if (bl->is_dir)
 				std::cout << "  D";   
 
-			if (it.second->is_longname)
+			if (bl->is_longname)
 				std::cout << "  L";   
 
-			if (!it.second->is_dir && !it.second->is_longname)
+			if (!bl->is_dir && bl->is_longname)
 				std::cout << "  N";   
 
 			std::cout << std::endl;
-		}
 	},show);
 
 	//auto res = tar.extract_file("CQjtKCjtubBPbuCnSHashFRPfeuYHOasdsQndsxvKJICaXufkyxrsdfgxFMtjHSIfpBMuuwJrYSAsDhfjYfhRZe_rZ_PDgvsiYEdW_lolasdfasdfasdfsadfadsfsadfsadfas/picohash.h");
