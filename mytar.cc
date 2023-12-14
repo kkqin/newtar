@@ -72,7 +72,7 @@ static int recusive_mkdir(const char* dirname) {
 #ifdef  __linux__
                         std::filesystem::create_directory(path);
 #elif   WIN32
-                        create_directory(path);
+                        std::filesystem::create_directory(path);
 #endif
                         *p = '/';
                 }
@@ -103,7 +103,7 @@ static void arrange_block(const std::string& tarfile, std::shared_ptr<TAR_HEAD> 
 	}
 
 	if(tar->type == lf_link) {
-		bl->is_hard_link = true; 
+		bl->is_hard_link = true;
 		bl->linkfilename = tar->link_name;
 	}
 }
@@ -116,11 +116,11 @@ private:
 
 	void do_draw(int process) {
 		std::cout << "\r";
-		std::cout << "Parsing... " <<  snppiner[process % 4] << std::flush; 
+		std::cout << "Parsing... " <<  snppiner[process % 4] << std::flush;
 	}
 public:
-	
-        void do_parsing(bool show, std::shared_ptr<std::ifstream> m_file, 
+
+        void do_parsing(bool show, std::shared_ptr<std::ifstream> m_file,
 			std::function<void(bool& longname_,std::queue<std::shared_ptr<TAR_HEAD>>& judge_queue)> judge_func) {
 		std::queue<std::shared_ptr<TAR_HEAD>> judge_queue;
 		bool longname_ = false;
@@ -133,13 +133,13 @@ public:
 			m_file->read(tar->block, read_size_);
 
 			tar->id = off_set_; // head start offset
-			off_set_ += 512; 
+			off_set_ += 512;
 			if(tar->size == 0x0)
 				continue;
 			auto inside_file_size = oct2uint(tar->size, 11);
 
 			off_set_ += inside_file_size;
-			auto res = inside_file_size % 512; 
+			auto res = inside_file_size % 512;
                         if(res) {
                                 off_set_ += (512 - res);
                         }
@@ -155,7 +155,7 @@ public:
         }
 };
 
-class Hub {	
+class Hub {
 	static Hub* m_instance;
 public:
 	std::map<std::string, std::map<long long, BlockPtr>> m_result; //offset, block
@@ -209,7 +209,7 @@ void NTar::parsing(std::function<void(BlockPtr)> func, bool verbose) {
 
 		if(tar == prev_tar && prev_tar->type == lf_longname)
 			return;
-	
+
 		auto bl = std::make_shared<Block>();
 		if(tar->type == lf_dir || tar->type == lf_longname) {
 			bl->offset = tar->id;
@@ -242,8 +242,8 @@ void NTar::parsing(std::function<void(BlockPtr)> func, bool verbose) {
 		Hub::instance()->m_result[m_name].insert({bl->offset, bl});
 
 		func(bl);
-		
-		clean_queue(judge_queue);			
+
+		clean_queue(judge_queue);
 	});
 }
 
@@ -286,10 +286,10 @@ bool NTar::extract_file(const long long offset) {
 	if(!filesize)
 		return false;
 	while(filesize) {
-		auto need_size = 512; 
+		auto need_size = 512;
 		if(filesize < 512)
-			need_size = filesize; 
-			
+			need_size = filesize;
+
 		char* buffer = new char[need_size];
 		m_file->read(buffer, need_size);
 		o.write(buffer, need_size);
@@ -302,4 +302,4 @@ bool NTar::extract_file(const long long offset) {
 	return true;
 }
 
-} // namspace 
+} // namspace
